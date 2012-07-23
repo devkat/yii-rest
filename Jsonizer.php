@@ -16,6 +16,11 @@ class Jsonizer {
       $obj['name'] = $model->humanReadableName();
     }
     
+    $excl = array();
+    if (method_exists($model, 'getJsonExcludedAttributes')) {
+        $excl = $model->getJsonExcludedAttributes();
+    }
+    
     foreach ($model->getAttributes() as $key => $value) {
       $jsonKey;
       $jsonValue;
@@ -39,6 +44,9 @@ class Jsonizer {
             $jsonValue = $value;
             break;
         }
+      }
+      else if (in_array($key, $excl)) {
+          
       }
       else {
         $jsonKey = $key;
