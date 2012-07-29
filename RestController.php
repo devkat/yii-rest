@@ -157,15 +157,20 @@ abstract class RestController extends CController {
     protected function _sendWrappedResponse($code, $string, $model) {
         $wrappedString = $string;
         $contentType = 'application/json';
-        if (method_exists($model, 'uploadAttributes') && count($model->uploadAttributes()) > 0) {
+        $uploadAttrs = $this->getUploadAttributes($model);
+        if (count($uploadAttrs) > 0) {
             $wrappedString = "<textarea>$string</textarea>";
             $contentType= 'text/html';
         }
         $this->_sendResponse($code, $wrappedString, $contentType);
     }
     
+    protected function getUploadAttributes($model) {
+        return method_exists($model, 'uploadAttributes') ? $model->uploadAttributes() : array();
+    }
+    
     protected function populateAttributes($model, $attributes) {
-        foreach ($model->uploadAttributes() as $attr) {
+        foreach ($this->getUploadAttributes($model) as $attr) {
             $model->$attr = CUploadedFile::getInstanceByName($attr);
         }
         foreach($attributes as $var => $value) {
