@@ -43,6 +43,14 @@ abstract class RestController extends CController {
         $jsonizer = new Jsonizer();
         return json_encode($jsonizer->toJson($model));
     }
+    
+    protected function getQueryCriteria() {
+        $criteria = new CDbCriteria();
+        foreach ($_GET as $key => $val) {
+            $criteria->addSearchCondition($key, preg_replace('/\*/', '', $val));
+        }
+        return $criteria;
+    }
 
     protected function sendDataResponse() {
         header('Content-type: application/json');
@@ -51,6 +59,7 @@ abstract class RestController extends CController {
         $firstItem = 0;
 
         $dataProvider = $this->getDataProvider();
+        $dataProvider->criteria = $this->getQueryCriteria();
         $size = $dataProvider->getTotalItemCount();
 
         $headers = apache_request_headers();
