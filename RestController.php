@@ -22,7 +22,7 @@ abstract class RestController extends CController {
         if (Yii::app()->request->getIsPutRequest()) {
             $this->put($id);
         }
-        if (Yii::app()->request->getIsPostRequest()) {
+        else if (Yii::app()->request->getIsPostRequest()) {
             $this->post($id);
         }
         else if (Yii::app()->request->getIsDeleteRequest()) {
@@ -47,7 +47,12 @@ abstract class RestController extends CController {
     protected function getQueryCriteria() {
         $criteria = new CDbCriteria();
         foreach ($_GET as $key => $val) {
-            $criteria->addSearchCondition($key, preg_replace('/\*/', '', $val));
+            if ($value === '') {
+                $criteria->addCondition('false');
+            }
+            else {
+                $criteria->addSearchCondition($key, preg_replace('/\*/', '', $val));
+            }
         }
         return $criteria;
     }
@@ -147,19 +152,48 @@ abstract class RestController extends CController {
         if ($attributes === null) {
             $attributes = $_POST;
         }
-        
+        $errors = array();
         $model = $this->findOrCreate($attributes);
+        
+        $sizeErrors = $this->validateSize($model);
+        if (count($sizeErrors) > 0) {
+            $this->_sendWrappedResponse(413, json_encode($sizeErrors), $model);
+            return;
+        }
         
         $tx = $model->dbConnection->beginTransaction();
         $this->populateAttributes($model, $attributes);
-        if ($model->save()) {
-            $tx->commit();
-            header("Location: ".$this->createUrl('view', array('id' => $model->id)));
-            $this->_sendWrappedResponse(201, $this->toJson($model), $model);
+        try {
+            if ($model->save()) {
+                $tx->commit();
+                header("Location: ".$this->createUrl('view', array('id' => $model->id)));
+                $this->_sendWrappedResponse(201, $this->toJson($model), $model);
+            }
+            else {
+                $tx->rollback();
+                $this->_sendWrappedResponse(500, json_encode($model->errors), $model);
+            }
         }
-        else {
+        catch (Exception $ex) {
             $tx->rollback();
-            $this->_sendWrappedResponse(500, json_encode($model->errors), $model);
+            Yii::log($ex->getTraceAsString(), "error");
+            $this->_sendWrappedResponse(500, json_encode(array($ex->getMessage())), $model);
+        }
+    }
+    
+    protected function validateSize($model) {
+        $size = 0;
+        foreach ($this->getUploadAttributes($model) as $attr) {
+            $size += CUploadedFile::getInstanceByName($attr)->size;
+        }
+        $conn = Yii::app()->db;
+        $command = $conn->createCommand("SHOW VARIABLES LIKE 'max_allowed_packet'");
+        $row = $command->queryRow(true);
+        $maxSize = $row['Value'];
+        if ($size > $maxSize) {
+            return array("upload" => array(sprintf("Upload size of %d bytes exceeds maximum size of %d bytes.", $size, $maxSize)));
+        } else {
+            return array();
         }
     }
     
